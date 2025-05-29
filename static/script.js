@@ -114,7 +114,8 @@ function sendMessage() {
             link.click();
             document.body.removeChild(link);
             
-            addMessage("bot", "✅ Đang tải file lương...");
+            // Display the success message from the backend
+            addMessage("bot", data.message || "✅ Đang tải file lương...");
 
         } catch (error) {
             console.error('Error triggering download from URL:', error);

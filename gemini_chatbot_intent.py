@@ -8,13 +8,12 @@ model = genai.GenerativeModel('models/gemini-2.0-flash')
 chat = model.start_chat()
 
 def extract_important_info(url, html_content, city=None):
-    """Extract important information based on API type"""
-    if "nghiphep/history" in url.lower():  
+    if "nghiphep/history" in url.lower():
         return {
             "type": "link",
             "url": url,
             "title": "📋 Xem lịch sử nghỉ phép",
-            "message": 
+            "message":
                 """📊 Tại trang lịch sử nghỉ phép, bạn sẽ thấy:
 - Danh sách tất cả đơn nghỉ phép đã gửi
 - Thời gian và số ngày nghỉ của từng đơn
@@ -22,8 +21,20 @@ def extract_important_info(url, html_content, city=None):
 - Người phê duyệt và thời gian phê duyệt
                 """
         }
- 
-    elif "project/progress" in url:  
+    elif "nghiphep/balance" in url.lower():
+        return {
+            "type": "link",
+            "url": url,
+            "title": "🗓️ Xem số ngày nghỉ còn lại",
+            "message":
+                """📅 Thông tin số ngày nghỉ:
+- Tổng số ngày nghỉ phép năm
+- Số ngày đã sử dụng
+- Số ngày còn lại
+- Thống kê theo loại nghỉ phép
+                """
+        }
+    elif "project/progress" in url:
         try:
             data = json.loads(html_content)
             return f"""
@@ -34,8 +45,7 @@ def extract_important_info(url, html_content, city=None):
 """.strip()
         except:
             return html_content
-            
-    elif "salary" in url:  
+    elif "salary" in url:
         try:
             data = json.loads(html_content)
             return f"""
@@ -46,7 +56,6 @@ def extract_important_info(url, html_content, city=None):
 """.strip()
         except:
             return html_content
-    
     return html_content
 
 def call_real_api(api_url, user_input=None):
@@ -62,16 +71,14 @@ def call_real_api(api_url, user_input=None):
 def get_response(prompt):
     try:
         response = chat.send_message(prompt)
-        # Return empty string instead of None on no response text
         return response.text.strip() if response.text else ""
     except Exception as e:
         print(f"Lỗi khi gọi Gemini: {str(e)}")
-        # Return a predefined error response or empty string on error
         return "Error: Unable to get response from AI."
 
 def clean_response(response):
     if not response:
-        return "" # Ensure we return empty string if input is None or empty
+        return ""
     response = response.strip()
     if response.startswith('```') and response.endswith('```'):
         response = response[3:-3]
@@ -79,76 +86,7 @@ def clean_response(response):
         response = response[4:]
     return response.strip()
 
-def get_working_hours(date):
-    """
-    Trả về thời gian làm việc cho một ngày cụ thể
-    Returns: (start_time, end_time) hoặc None nếu là cuối tuần
-    """
-    if date.weekday() >= 5:  
-        return None
-        
-    morning_start = datetime.combine(date.date(), datetime.strptime("08:30", "%H:%M").time())
-    morning_end = datetime.combine(date.date(), datetime.strptime("12:00", "%H:%M").time())
-    
-    afternoon_start = datetime.combine(date.date(), datetime.strptime("13:30", "%H:%M").time())
-    afternoon_end = datetime.combine(date.date(), datetime.strptime("17:30", "%H:%M").time())
-    
-    return {
-        "morning": (morning_start, morning_end),
-        "afternoon": (afternoon_start, afternoon_end)
-    }
-
-def calculate_leave_hours(from_date, to_date):
-    """
-    Tính số giờ nghỉ dựa trên thời gian làm việc
-    """
-    if not from_date or not to_date:
-        return 0
-        
-    try:
-        start = datetime.strptime(from_date, "%m %d %Y %H:%M")
-        end = datetime.strptime(to_date, "%m %d %Y %H:%M")
-        
-        if end < start:
-            return 0
-            
-        total_hours = 0
-        current = start
-        
-        while current.date() <= end.date():
-            working_hours = get_working_hours(current)
-            
-            if working_hours:
-                morning_start, morning_end = working_hours["morning"]
-                afternoon_start, afternoon_end = working_hours["afternoon"]
-                
-                if current.date() == start.date():
-                    morning_start = max(morning_start, start)
-                if current.date() == end.date():
-                    morning_end = min(morning_end, end)
-                    
-                if morning_start < morning_end:
-                    total_hours += (morning_end - morning_start).total_seconds() / 3600
-                
-                if current.date() == start.date():
-                    afternoon_start = max(afternoon_start, start)
-                if current.date() == end.date():
-                    afternoon_end = min(afternoon_end, end)
-                    
-                if afternoon_start < afternoon_end:
-                    total_hours += (afternoon_end - afternoon_start).total_seconds() / 3600
-            
-            current += timedelta(days=1)
-            
-        return int(round(total_hours))
-    except Exception as e:
-        print(f"Error calculating leave hours: {str(e)}")
-        return 0
-
 def export_payslip(month):
-    """
-    Xuất file lương theo tháng
-    """
     try:
         url = f"https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip"
         headers = {
@@ -162,28 +100,82 @@ def export_payslip(month):
             "month": f"{month}-01T00:00:00"
         }
         response = requests.get(url, params=params, headers=headers)
-        
+
         if response.status_code == 200:
             response_text = response.text.strip()
-            # If response is 200 OK and the body is not empty, assume it's the file path
             if response_text:
-                # Remove surrounding double quotes if they exist
                 if response_text.startswith('"') and response_text.endswith('"'):
-                    response_text = response_text[1:-1] # Remove first and last character
+                    response_text = response_text[1:-1]
 
                 download_url = f"https://mbi.sapotacorp.vn{response_text}"
-                print(f"Constructed download URL: {download_url}") # For debugging
+                print(f"Constructed download URL: {download_url}")
                 return {"success": True, "download_url": download_url}
             else:
-                # If 200 OK but empty response body
                 return {"success": False, "message": "API phản hồi thành công (200 OK) nhưng nội dung trống."}
         else:
-            # Non-200 status code indicates an error from the API
             return {"success": False, "message": f"Lỗi từ API xuất file: {response.status_code} - {response.text}"}
-            
+
     except Exception as e:
-        # Handle connection errors or other exceptions
         return {"success": False, "message": f"Lỗi kết nối hoặc xử lý khi gọi API xuất file: {str(e)}"}
+
+def get_working_hours(date):
+    if date.weekday() >= 5:
+        return None
+
+    morning_start = datetime.combine(date.date(), datetime.strptime("08:30", "%H:%M").time())
+    morning_end = datetime.combine(date.date(), datetime.strptime("12:00", "%H:%M").time())
+
+    afternoon_start = datetime.combine(date.date(), datetime.strptime("13:30", "%H:%M").time())
+    afternoon_end = datetime.combine(date.date(), datetime.strptime("17:30", "%H:%M").time())
+
+    return {
+        "morning": (morning_start, morning_end),
+        "afternoon": (afternoon_start, afternoon_end)
+    }
+
+def calculate_leave_hours(from_date, to_date):
+    if not from_date or not to_date:
+        return 0
+
+    try:
+        start = datetime.strptime(from_date, "%m %d %Y %H:%M")
+        end = datetime.strptime(to_date, "%m %d %Y %H:%M")
+
+        if end < start:
+            return 0
+
+        total_hours = 0
+        current = start
+
+        while current.date() <= end.date():
+            working_hours = get_working_hours(current)
+
+            if working_hours:
+                morning_start, morning_end = working_hours["morning"]
+                afternoon_start, afternoon_end = working_hours["afternoon"]
+
+                if current.date() == start.date():
+                    morning_start = max(morning_start, start)
+                if current.date() == end.date():
+                    morning_end = min(morning_end, end)
+
+                if morning_start < morning_end:
+                    total_hours += (morning_end - morning_start).total_seconds() / 3600
+
+                if current.date() == start.date():
+                    afternoon_start = max(afternoon_start, start)
+                if current.date() == end.date():
+                    afternoon_end = min(afternoon_end, end)
+
+                if afternoon_start < afternoon_end:
+                    total_hours += (afternoon_end - afternoon_start).total_seconds() / 3600
+
+            current += timedelta(days=1)
+
+        return int(round(total_hours))
+    except Exception as e:
+        print(f"Error calculating leave hours: {str(e)}")
+        return 0
 
 def detect_api_intent(user_input):
     current_date = datetime.now()
@@ -192,12 +184,12 @@ def detect_api_intent(user_input):
     next_monday = current_date + timedelta(days=days_until_monday)
     if next_monday.date() == current_date.date():
         next_monday += timedelta(days=7)
-    
+
     days_until_friday = (4 - current_date.weekday() + 7) % 7
     next_friday = current_date + timedelta(days=days_until_friday)
-    if next_friday.date() == current_date.date(): 
+    if next_friday.date() == current_date.date():
         next_friday += timedelta(days=7)
-        
+
     prompt = f"""
 Bạn là trợ lý AI. Phân tích yêu cầu của người dùng và xác định intent phù hợp.
 
@@ -208,7 +200,7 @@ Thông tin thời gian làm việc:
 - Không làm việc thứ 7 và chủ nhật
 
 Lưu ý quan trọng về xử lý ngày tháng:
-- LUÔN LUÔN sử dụng "Ngày hiện tại là: {current_date.strftime('%m %d %Y %H:%M')}" làm mốc thời gian để suy luận các mốc thời gian tương đối như "hôm nay", "mai", "tuần sau", "thứ 2", v.v.
+- LUÔN LUÔN sử "Ngày hiện tại là: {current_date.strftime('%m %d %Y %H:%M')}" làm mốc thời gian để suy luận các mốc thời gian tương đối như "hôm nay", "mai", "tuần sau", "thứ 2", v.v.
 - Định dạng ngày giờ trả về phải là: "MM DD YYYY HH:mm" (ví dụ: "05 27 2024 08:30")
 
 Cách xử lý thời gian:
@@ -262,7 +254,7 @@ Phân tích các từ khóa:
 
 Ví dụ về phân tích và trả về JSON (Sử dụng Ngày hiện tại: {current_date.strftime('%m %d %Y')}):
 
-Người dùng: "nghỉ sáng mai vì bị cảm" → 
+Người dùng: "nghỉ sáng mai vì bị cảm" →
 {{
   "intent": "leave_request",
   "api_url": "https://mbi.sapotacorp.vn/api/MissionAPI/SubmitReasonOffWork",
@@ -270,11 +262,11 @@ Người dùng: "nghỉ sáng mai vì bị cảm" →
     "from_date": "{next_day.strftime('%m %d %Y')} 08:30",
     "to_date": "{next_day.strftime('%m %d %Y')} 12:00",
     "time_off": "4",
-    "reason": "bị cảm"
+    "reason": "bị cảm"}}
   }}
 }}
 
-Người dùng: "xuất file lương tháng 3" → 
+Người dùng: "xuất file lương tháng 3" →
 {{
   "intent": "payslip_export",
   "api_url": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip",
@@ -286,7 +278,7 @@ Chỉ trả về JSON, không giải thích.
 """
     raw_response = get_response(prompt)
     response = clean_response(raw_response)
-    
+
     try:
         parsed = json.loads(response)
         if parsed.get("intent") == "leave_request" and parsed.get("leave_info"):
@@ -296,16 +288,14 @@ Chỉ trả về JSON, không giải thích.
              if from_date and to_date:
                 hours = calculate_leave_hours(from_date, to_date)
                 leave_info["time_off"] = str(hours)
-                parsed["leave_info"] = leave_info # Update parsed with calculated hours
+                parsed["leave_info"] = leave_info
              else:
-                 # If dates are missing, set intent to none
                  parsed["intent"] = "none"
                  parsed["api_url"] = ""
                  parsed["leave_info"] = None
 
         return json.dumps(parsed)
     except Exception as e:
-        # If JSON parsing fails or any other error, return intent none
         print(f"Lỗi phân tích JSON hoặc xử lý khác trong detect_api_intent: {e}")
         return json.dumps({ "intent": "none", "api_url": "", "leave_info": None })
 

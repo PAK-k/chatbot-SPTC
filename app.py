@@ -114,14 +114,18 @@ def chat():
             if result.get("success"):
                 # If API call was successful (status code 200 in export_payslip)
                 if result.get("download_url"):
-                    # If export_payslip returned a download URL, send it to frontend
-                    return jsonify(type="download_link", url=result["download_url"])
+                    # If export_payslip returned a download URL, send it to frontend with success message
+                    return jsonify({
+                        "type": "download_link",
+                        "url": result["download_url"],
+                        "message": "✅ File lương đã được xuất thành công."
+                    })
                 elif result.get("message"):
                     # If export_payslip returned a success message but no URL
                     return jsonify(type="chat", result=f"✅ {result.get('message')}")
                 else:
                     # Unexpected success response from export_payslip
-                     return jsonify(type="chat", result="✅ Yêu cầu xử lý thành công nhưng không rõ kết quả tải file.")
+                    return jsonify(type="chat", result="✅ Yêu cầu xử lý thành công nhưng không rõ kết quả tải file.")
             else:
                 # API call failed (non-200 status or other error in export_payslip)
                 return jsonify(type="chat", result=f"❌ {result.get('message')}")
