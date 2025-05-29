@@ -80,6 +80,44 @@ function sendMessage() {
         addMessage("bot", data.result);
       } else if (data.type === "api") {
         addMessage("bot", data.result, true);
+      } else if (data.type === "payslip_button") {
+        const chatBox = document.getElementById("chat-box");
+        const messageWrapper = document.createElement("div");
+        messageWrapper.classList.add("message-wrapper", "bot");
+
+        const avatar = document.createElement("div");
+        avatar.classList.add("avatar");
+        avatar.innerText = "🤖";
+
+        const messageDiv = document.createElement("div");
+        messageDiv.classList.add("message", "bot");
+
+        const linkContainer = document.createElement('div');
+        linkContainer.classList.add('link-container');
+        
+        const messageText = document.createElement('div');
+        messageText.classList.add('link-message');
+        messageText.textContent = data.result.message;
+        linkContainer.appendChild(messageText);
+        
+        const buttonWrapper = document.createElement('div');
+        buttonWrapper.classList.add('link-button-wrapper');
+        
+        const linkButton = document.createElement('a');
+        linkButton.href = data.result.url;
+        linkButton.target = '_blank'; 
+        linkButton.rel = 'noopener noreferrer'; 
+        linkButton.classList.add('link-button');
+        linkButton.innerHTML = data.result.button_text;
+        
+        buttonWrapper.appendChild(linkButton);
+        linkContainer.appendChild(buttonWrapper);
+        
+        messageDiv.appendChild(linkContainer);
+        messageWrapper.appendChild(avatar);
+        messageWrapper.appendChild(messageDiv);
+        chatBox.appendChild(messageWrapper);
+        chatBox.scrollTop = chatBox.scrollHeight;
       } else {
         addMessage("bot", "🤖 Không rõ phản hồi từ server.");
       }
@@ -126,11 +164,16 @@ function initChat() {
       }, index * 800);
     });
   }, 500);
-}
 
-function toggleChat() {
-  const chatWidget = document.getElementById("chat-widget");
-  chatWidget.classList.toggle("chat-hidden");
+  // Add event listeners to suggestion buttons
+  document.querySelectorAll('.suggestion-button').forEach(button => {
+    button.addEventListener('click', () => {
+      const userInput = document.getElementById('user-input');
+      userInput.value = button.getAttribute('data-text');
+      // Automatically send the message after filling the input
+      sendMessage();
+    });
+  });
 }
 
 function toggleChat() {
@@ -142,7 +185,6 @@ function toggleChat() {
     if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
   }, 300);
 }
-
 }
 
 window.addEventListener("load", initChat);

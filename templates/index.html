@@ -9,8 +9,17 @@
 <body>
   <div id="chat-toggle-button" onclick="toggleChat()">💬</div>
 
+  <div class="main-content-suggestions">
+    <div class="suggestions-area">
+      <button class="suggestion-button" data-text="đăng ký lịch nghỉ">Đăng ký lịch nghỉ</button>
+      <button class="suggestion-button" data-text="xuất file lương tháng này">Xuất lương tháng này</button>
+      <button class="suggestion-button" data-text="xem lịch sử nghỉ phép">Lịch sử nghỉ phép</button>
+    </div>
+  </div>
+
   <div class="chat-container" id="chat-widget">
     <div class="chat-header">🤖 SapotaCorp Chatbot</div>
+    
     <div id="chat-box" class="chat-box"></div>
     <div class="chat-input-area">
       <input type="text" id="user-input" placeholder="Nhập tin nhắn..." />

@@ -22,21 +22,7 @@ def extract_important_info(url, html_content, city=None):
 - Người phê duyệt và thời gian phê duyệt
                 """
         }
-            
-    elif "nghiphep/balance" in url.lower():  
-        return {
-            "type": "link",
-            "url": url,
-            "title": "🗓️ Xem số ngày nghỉ còn lại",
-            "message": 
-                """📅 Thông tin số ngày nghỉ:
-- Tổng số ngày nghỉ phép năm
-- Số ngày đã sử dụng
-- Số ngày còn lại
-- Thống kê theo loại nghỉ phép
-                """
-        }
-            
+ 
     elif "project/progress" in url:  
         try:
             data = json.loads(html_content)
@@ -76,14 +62,16 @@ def call_real_api(api_url, user_input=None):
 def get_response(prompt):
     try:
         response = chat.send_message(prompt)
-        return response.text.strip() if response.text else None
+        # Return empty string instead of None on no response text
+        return response.text.strip() if response.text else ""
     except Exception as e:
         print(f"Lỗi khi gọi Gemini: {str(e)}")
-        return None
+        # Return a predefined error response or empty string on error
+        return "Error: Unable to get response from AI."
 
 def clean_response(response):
     if not response:
-        return ""
+        return "" # Ensure we return empty string if input is None or empty
     response = response.strip()
     if response.startswith('```') and response.endswith('```'):
         response = response[3:-3]
@@ -157,6 +145,36 @@ def calculate_leave_hours(from_date, to_date):
         print(f"Error calculating leave hours: {str(e)}")
         return 0
 
+def export_payslip(month):
+    """
+    Xuất file lương theo tháng
+    """
+    try:
+        url = f"https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip"
+        headers = {
+            "accept": "application/json, text/plain, */*",
+            "authorization": "michael##Hamia*10124##4",
+            "cache-control": "no-cache",
+            "pragma": "no-cache",
+            "referer": "https://mbi.sapotacorp.vn/User/Payslip"
+        }
+        params = {
+            "month": f"{month}-01T00:00:00"
+        }
+        response = requests.get(url, params=params, headers=headers)
+        
+        if response.status_code == 200:
+            # Assume 200 OK means the file generation request was successful on the server
+            # Return success=True and the response content/text for potential debugging if needed
+            return {"success": True, "data": response.content, "message": response.text}
+        else:
+            # Non-200 status code indicates an error from the API
+            return {"success": False, "message": f"Lỗi khi gọi API xuất file: {response.status_code} - {response.text}"}
+            
+    except Exception as e:
+        # Handle connection errors or other exceptions
+        return {"success": False, "message": f"Lỗi kết nối hoặc xử lý khi gọi API: {str(e)}"}
+
 def detect_api_intent(user_input):
     current_date = datetime.now()
     # Calculate next day and next Monday/Friday for examples
@@ -208,6 +226,13 @@ Nếu có ý định nghỉ phép và xác định được thời gian, trả v
   }}
 }}
 
+Nếu có ý định xuất file lương, trả về JSON dạng:
+{{
+  "intent": "payslip_export",
+  "api_url": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip",
+  "month": "<năm-tháng>"
+}}
+
 Nếu KHÔNG cần gọi API hoặc không xác định được thời gian nghỉ, trả về:
 {{
   "intent": "none",
@@ -219,11 +244,13 @@ Danh sách intent được hỗ trợ:
 - "leave_request": "https://mbi.sapotacorp.vn/api/MissionAPI/SubmitReasonOffWork"
 - "leave_history": "https://mbi.sapotacorp.vn/User/NghiPhep/History"
 - "leave_balance": "https://mbi.sapotacorp.vn/User/NghiPhep/Balance"
+- "payslip_export": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip"
 
 Phân tích các từ khóa:
 - Đăng ký nghỉ, xin nghỉ, tạo đơn nghỉ → leave_request
 - Xem lịch sử nghỉ, đơn đã gửi → leave_history
 - Số ngày nghỉ còn lại → leave_balance
+- Xuất file lương, tải file lương → payslip_export
 
 Ví dụ về phân tích và trả về JSON (Sử dụng Ngày hiện tại: {current_date.strftime('%m %d %Y')}):
 
@@ -239,28 +266,11 @@ Người dùng: "nghỉ sáng mai vì bị cảm" →
   }}
 }}
 
-Người dùng: "nghỉ cả tuần sau" → 
+Người dùng: "xuất file lương tháng 3" → 
 {{
-  "intent": "leave_request",
-  "api_url": "https://mbi.sapotacorp.vn/api/MissionAPI/SubmitReasonOffWork",
-  "leave_info": {{
-    "from_date": "{next_monday.strftime('%m %d %Y')} 13:30",
-    "to_date": "{next_monday.strftime('%m %d %Y')} 17:30",
-    "time_off": "38",
-    "reason": ""
-  }}
-}}
-
-Người dùng: "nghỉ cả ngày hôm nay" → 
-{{
-  "intent": "leave_request",
-  "api_url": "https://mbi.sapotacorp.vn/api/MissionAPI/SubmitReasonOffWork",
-  "leave_info": {{
-    "from_date": "{current_date.strftime('%m %d %Y')} 08:30",
-    "to_date": "{current_date.strftime('%m %d %Y')} 17:30",
-    "time_off": "8",
-    "reason": ""
-  }}
+  "intent": "payslip_export",
+  "api_url": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip",
+  "month": "2024-03"
 }}
 
 Câu người dùng: "{user_input}"
@@ -287,8 +297,9 @@ Chỉ trả về JSON, không giải thích.
                  parsed["leave_info"] = None
 
         return json.dumps(parsed)
-    except:
+    except Exception as e:
         # If JSON parsing fails or any other error, return intent none
+        print(f"Lỗi phân tích JSON hoặc xử lý khác trong detect_api_intent: {e}")
         return json.dumps({ "intent": "none", "api_url": "", "leave_info": None })
 
 def chat_response(user_input):

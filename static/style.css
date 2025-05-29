@@ -25,6 +25,59 @@ body {
   transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
+.main-content-suggestions {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  text-align: left;
+  z-index: 999;
+}
+
+.suggestions-area {
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(36, 59, 85, 0.9);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 198, 255, 0.3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  overflow: visible;
+  scrollbar-width: auto;
+  -ms-overflow-style: auto;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.suggestions-area::-webkit-scrollbar {
+  display: block;
+}
+
+.suggestion-button {
+  padding: 10px 15px;
+  border: 1px solid #00c6ff;
+  border-radius: 8px;
+  background-color: rgba(0, 198, 255, 0.1);
+  color: #e0f7fa;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+  text-align: left;
+  white-space: nowrap;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.suggestion-button:hover {
+  background-color: #00c6ff;
+  color: #1b1b2f;
+  border-color: #00c6ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 198, 255, 0.4);
+}
+
+.suggestion-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 5px rgba(0, 198, 255, 0.2);
+}
 
 .chat-header {
   background: linear-gradient(to right, #00c6ff, #0072ff);
