@@ -4,6 +4,7 @@ import json
 import requests
 import io
 from datetime import datetime
+import base64
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key"  
@@ -107,15 +108,22 @@ def chat():
             if not month:
                 return jsonify(type="chat", result="❌ Không xác định được tháng cần xuất file lương")
             
+            # Call the API for payslip export
             result = export_payslip(month)
             
             if result.get("success"):
-                return jsonify(type="payslip_button", result={
-                    "message": "✅ Đã gửi yêu cầu tạo file lương. File đã được tạo trên server.",
-                    "button_text": "🔗 Xem trang Lương",
-                    "url": "https://mbi.sapotacorp.vn/User/Payslip"
-                })
+                # If API call was successful (status code 200 in export_payslip)
+                if result.get("download_url"):
+                    # If export_payslip returned a download URL, send it to frontend
+                    return jsonify(type="download_link", url=result["download_url"])
+                elif result.get("message"):
+                    # If export_payslip returned a success message but no URL
+                    return jsonify(type="chat", result=f"✅ {result.get('message')}")
+                else:
+                    # Unexpected success response from export_payslip
+                     return jsonify(type="chat", result="✅ Yêu cầu xử lý thành công nhưng không rõ kết quả tải file.")
             else:
+                # API call failed (non-200 status or other error in export_payslip)
                 return jsonify(type="chat", result=f"❌ {result.get('message')}")
         else:
             api_result = call_real_api(parsed["api_url"], user_input)

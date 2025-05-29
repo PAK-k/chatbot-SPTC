@@ -164,30 +164,38 @@ def export_payslip(month):
         response = requests.get(url, params=params, headers=headers)
         
         if response.status_code == 200:
-            # Assume 200 OK means the file generation request was successful on the server
-            # Return success=True and the response content/text for potential debugging if needed
-            return {"success": True, "data": response.content, "message": response.text}
+            response_text = response.text.strip()
+            # If response is 200 OK and the body is not empty, assume it's the file path
+            if response_text:
+                # Remove surrounding double quotes if they exist
+                if response_text.startswith('"') and response_text.endswith('"'):
+                    response_text = response_text[1:-1] # Remove first and last character
+
+                download_url = f"https://mbi.sapotacorp.vn{response_text}"
+                print(f"Constructed download URL: {download_url}") # For debugging
+                return {"success": True, "download_url": download_url}
+            else:
+                # If 200 OK but empty response body
+                return {"success": False, "message": "API phản hồi thành công (200 OK) nhưng nội dung trống."}
         else:
             # Non-200 status code indicates an error from the API
-            return {"success": False, "message": f"Lỗi khi gọi API xuất file: {response.status_code} - {response.text}"}
+            return {"success": False, "message": f"Lỗi từ API xuất file: {response.status_code} - {response.text}"}
             
     except Exception as e:
         # Handle connection errors or other exceptions
-        return {"success": False, "message": f"Lỗi kết nối hoặc xử lý khi gọi API: {str(e)}"}
+        return {"success": False, "message": f"Lỗi kết nối hoặc xử lý khi gọi API xuất file: {str(e)}"}
 
 def detect_api_intent(user_input):
     current_date = datetime.now()
-    # Calculate next day and next Monday/Friday for examples
     next_day = current_date + timedelta(days=1)
-    # Find the next Monday and Friday
     days_until_monday = (0 - current_date.weekday() + 7) % 7
     next_monday = current_date + timedelta(days=days_until_monday)
-    if next_monday.date() == current_date.date(): # If today is Monday, find next Monday
+    if next_monday.date() == current_date.date():
         next_monday += timedelta(days=7)
     
     days_until_friday = (4 - current_date.weekday() + 7) % 7
     next_friday = current_date + timedelta(days=days_until_friday)
-    if next_friday.date() == current_date.date(): # If today is Friday, find next Friday
+    if next_friday.date() == current_date.date(): 
         next_friday += timedelta(days=7)
         
     prompt = f"""
@@ -281,7 +289,6 @@ Chỉ trả về JSON, không giải thích.
     
     try:
         parsed = json.loads(response)
-        # Only calculate hours if leave_info exists and dates are present
         if parsed.get("intent") == "leave_request" and parsed.get("leave_info"):
              leave_info = parsed["leave_info"]
              from_date = leave_info.get("from_date")

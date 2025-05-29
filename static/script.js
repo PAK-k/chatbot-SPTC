@@ -80,44 +80,46 @@ function sendMessage() {
         addMessage("bot", data.result);
       } else if (data.type === "api") {
         addMessage("bot", data.result, true);
-      } else if (data.type === "payslip_button") {
-        const chatBox = document.getElementById("chat-box");
-        const messageWrapper = document.createElement("div");
-        messageWrapper.classList.add("message-wrapper", "bot");
+      } else if (data.type === "payslip_data") {
+        // Handle payslip file download
+        try {
+            const byteCharacters = atob(data.data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: 'text/csv' }); // Assuming CSV type based on previous API response
 
-        const avatar = document.createElement("div");
-        avatar.classList.add("avatar");
-        avatar.innerText = "🤖";
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = data.filename || 'payslip.csv'; // Use filename from backend or default
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            addMessage("bot", "✅ File lương đã được tải về.");
 
-        const messageDiv = document.createElement("div");
-        messageDiv.classList.add("message", "bot");
+        } catch (error) {
+            console.error('Error downloading payslip:', error);
+            addMessage("bot", "❌ Lỗi khi tải file lương.");
+        }
+      } else if (data.type === "download_link") {
+        // Handle direct download from a URL
+        try {
+            const link = document.createElement('a');
+            link.href = data.url; // The full download URL from the backend
+            link.download = data.url.split('/').pop(); // Suggest filename from URL
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            addMessage("bot", "✅ Đang tải file lương...");
 
-        const linkContainer = document.createElement('div');
-        linkContainer.classList.add('link-container');
-        
-        const messageText = document.createElement('div');
-        messageText.classList.add('link-message');
-        messageText.textContent = data.result.message;
-        linkContainer.appendChild(messageText);
-        
-        const buttonWrapper = document.createElement('div');
-        buttonWrapper.classList.add('link-button-wrapper');
-        
-        const linkButton = document.createElement('a');
-        linkButton.href = data.result.url;
-        linkButton.target = '_blank'; 
-        linkButton.rel = 'noopener noreferrer'; 
-        linkButton.classList.add('link-button');
-        linkButton.innerHTML = data.result.button_text;
-        
-        buttonWrapper.appendChild(linkButton);
-        linkContainer.appendChild(buttonWrapper);
-        
-        messageDiv.appendChild(linkContainer);
-        messageWrapper.appendChild(avatar);
-        messageWrapper.appendChild(messageDiv);
-        chatBox.appendChild(messageWrapper);
-        chatBox.scrollTop = chatBox.scrollHeight;
+        } catch (error) {
+            console.error('Error triggering download from URL:', error);
+            addMessage("bot", "❌ Lỗi khi chuẩn bị tải file từ đường dẫn.");
+        }
       } else {
         addMessage("bot", "🤖 Không rõ phản hồi từ server.");
       }
