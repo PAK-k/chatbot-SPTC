@@ -208,27 +208,23 @@ def export_point_report():
         url = "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelReportUser"
         headers = {
             "accept": "application/json, text/plain, */*",
-            "authorization": "michael##Hamia*10124##4", # <-- Replace with actual authorization header if needed
+            "authorization": "michael##Hamia*10124##4", 
             "cache-control": "no-cache",
             "pragma": "no-cache",
             "referer": "https://mbi.sapotacorp.vn/"
         }
-        # The API in the image does not show any parameters. Assuming no parameters are needed.
         response = requests.get(url, headers=headers)
 
         if response.status_code == 200:
             response_text = response.text.strip()
             if response_text:
-                # Assuming the API returns a downloadable file path or similar
                 print(f"API point report response text: {response_text}")
                 if response_text.startswith('"') and response_text.endswith('"'):
                     response_text = response_text[1:-1]
 
-                # Construct a potential download URL. Adjust if the API returns a direct link.
                 if response_text.startswith('http://') or response_text.startswith('https://'):
                     download_url = response_text
                 else:
-                    # Assuming the response is a relative path, construct the full URL
                     download_url = f"https://mbi.sapotacorp.vn{response_text}"
                 print(f"Constructed point report download URL: {download_url}")
                 return {"success": True, "download_url": download_url}
