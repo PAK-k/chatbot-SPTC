@@ -2,9 +2,7 @@ from flask import Flask, render_template, request, jsonify, session, send_file
 from gemini_chatbot_intent import detect_api_intent, chat_response, call_real_api, export_payslip
 import json
 import requests
-import io
 from datetime import datetime
-import base64
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key"  
@@ -108,26 +106,30 @@ def chat():
             if not month:
                 return jsonify(type="chat", result="❌ Không xác định được tháng cần xuất file lương")
             
-            # Call the API for payslip export
             result = export_payslip(month)
             
             if result.get("success"):
-                # If API call was successful (status code 200 in export_payslip)
                 if result.get("download_url"):
-                    # If export_payslip returned a download URL, send it to frontend with success message
                     return jsonify({
                         "type": "download_link",
                         "url": result["download_url"],
                         "message": "✅ File lương đã được xuất thành công."
                     })
                 elif result.get("message"):
-                    # If export_payslip returned a success message but no URL
                     return jsonify(type="chat", result=f"✅ {result.get('message')}")
                 else:
-                    # Unexpected success response from export_payslip
                     return jsonify(type="chat", result="✅ Yêu cầu xử lý thành công nhưng không rõ kết quả tải file.")
             else:
-                # API call failed (non-200 status or other error in export_payslip)
+                return jsonify(type="chat", result=f"❌ {result.get('message')}")
+        elif parsed.get("intent") == "point_export":
+            result = export_point_report()
+            if result.get("success"):
+                return jsonify({
+                    "type": "download_link",
+                    "url": result["download_url"],
+                    "message": "✅ Báo cáo điểm đã được xuất thành công."
+                })
+            else:
                 return jsonify(type="chat", result=f"❌ {result.get('message')}")
         else:
             api_result = call_real_api(parsed["api_url"], user_input)
@@ -141,7 +143,6 @@ def chat():
 
 @app.route("/download-payslip", methods=["GET"])
 def download_payslip():
-    # This route is still not used for direct download based on current API behavior
     return jsonify({"error": "Tính năng tải file trực tiếp không hỗ trợ do cách API trả về dữ liệu."}), 400
 
 def submit_leave_request(userid, username, from_date, to_date, time_off, reason):
@@ -198,6 +199,46 @@ def handle_leave_request():
         
     except Exception as e:
         return jsonify({"success": False, "message": f"Lỗi: {str(e)}"})
+
+def export_point_report():
+    """
+    Xuất báo cáo điểm từ API
+    """
+    try:
+        url = "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelReportUser"
+        headers = {
+            "accept": "application/json, text/plain, */*",
+            "authorization": "michael##Hamia*10124##4", # <-- Replace with actual authorization header if needed
+            "cache-control": "no-cache",
+            "pragma": "no-cache",
+            "referer": "https://mbi.sapotacorp.vn/"
+        }
+        # The API in the image does not show any parameters. Assuming no parameters are needed.
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
+            response_text = response.text.strip()
+            if response_text:
+                # Assuming the API returns a downloadable file path or similar
+                print(f"API point report response text: {response_text}")
+                if response_text.startswith('"') and response_text.endswith('"'):
+                    response_text = response_text[1:-1]
+
+                # Construct a potential download URL. Adjust if the API returns a direct link.
+                if response_text.startswith('http://') or response_text.startswith('https://'):
+                    download_url = response_text
+                else:
+                    # Assuming the response is a relative path, construct the full URL
+                    download_url = f"https://mbi.sapotacorp.vn{response_text}"
+                print(f"Constructed point report download URL: {download_url}")
+                return {"success": True, "download_url": download_url}
+            else:
+                return {"success": False, "message": "API xuất báo cáo điểm phản hồi thành công (200 OK) nhưng nội dung trống."}
+        else:
+            return {"success": False, "message": f"Lỗi từ API xuất báo cáo điểm: {response.status_code} - {response.text}"}
+
+    except Exception as e:
+        return {"success": False, "message": f"Lỗi kết nối hoặc xử lý khi gọi API xuất báo cáo điểm: {str(e)}"}
 
 if __name__ == "__main__":
     app.run(debug=True)

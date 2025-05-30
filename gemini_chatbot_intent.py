@@ -200,6 +200,7 @@ Thông tin thời gian làm việc:
 - Không làm việc thứ 7 và chủ nhật
 
 Lưu ý quan trọng về xử lý ngày tháng:
+- h: là giờ (ví dụ 12h trưa tức là 12:00)
 - LUÔN LUÔN sử "Ngày hiện tại là: {current_date.strftime('%m %d %Y %H:%M')}" làm mốc thời gian để suy luận các mốc thời gian tương đối như "hôm nay", "mai", "tuần sau", "thứ 2", v.v.
 - Định dạng ngày giờ trả về phải là: "MM DD YYYY HH:mm" (ví dụ: "05 27 2024 08:30")
 
@@ -233,6 +234,12 @@ Nếu có ý định xuất file lương, trả về JSON dạng:
   "month": "<năm-tháng>"
 }}
 
+Nếu có ý định xuất file point, trả về JSON dạng:
+{{
+  "intent": "point_export",
+  "api_url": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelReportUser"
+}}
+
 Nếu KHÔNG cần gọi API hoặc không xác định được thời gian nghỉ, trả về:
 {{
   "intent": "none",
@@ -243,14 +250,14 @@ Nếu KHÔNG cần gọi API hoặc không xác định được thời gian ngh
 Danh sách intent được hỗ trợ:
 - "leave_request": "https://mbi.sapotacorp.vn/api/MissionAPI/SubmitReasonOffWork"
 - "leave_history": "https://mbi.sapotacorp.vn/User/NghiPhep/History"
-- "leave_balance": "https://mbi.sapotacorp.vn/User/NghiPhep/Balance"
 - "payslip_export": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip"
+- "point_export": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelReportUser"
 
 Phân tích các từ khóa:
 - Đăng ký nghỉ, xin nghỉ, tạo đơn nghỉ → leave_request
 - Xem lịch sử nghỉ, đơn đã gửi → leave_history
-- Số ngày nghỉ còn lại → leave_balance
 - Xuất file lương, tải file lương → payslip_export
+- Xuất file point, tải báo cáo user, xuất báo cáo user → point_export
 
 Ví dụ về phân tích và trả về JSON (Sử dụng Ngày hiện tại: {current_date.strftime('%m %d %Y')}):
 
@@ -263,7 +270,6 @@ Người dùng: "nghỉ sáng mai vì bị cảm" →
     "to_date": "{next_day.strftime('%m %d %Y')} 12:00",
     "time_off": "4",
     "reason": "bị cảm"}}
-  }}
 }}
 
 Người dùng: "xuất file lương tháng 3" →
@@ -271,6 +277,12 @@ Người dùng: "xuất file lương tháng 3" →
   "intent": "payslip_export",
   "api_url": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip",
   "month": "2024-03"
+}}
+
+Người dùng: "xuất file point" →
+{{
+  "intent": "point_export",
+  "api_url": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelReportUser"
 }}
 
 Câu người dùng: "{user_input}"
