@@ -11,12 +11,10 @@ load_dotenv()
 
 slack_app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
 
-# Dictionary to store user sessions
 user_sessions = {}
 
 def process_message(text, user_id):
     """Xử lý tin nhắn và trả về phản hồi phù hợp"""
-    # Check if user is waiting for leave details
     if user_sessions.get(user_id, {}).get("waiting_for_leave_details"):
         user_sessions[user_id].pop("waiting_for_leave_details")
         intent_result = detect_api_intent(text)
@@ -46,7 +44,6 @@ def process_message(text, user_id):
         except json.JSONDecodeError:
             return chat_response("Không hiểu rõ thông tin nghỉ phép bạn vừa cung cấp (lỗi phân tích).")
 
-    # Check if user is waiting for leave reason
     if user_sessions.get(user_id, {}).get("waiting_for_leave_reason"):
         leave_info = user_sessions[user_id].get("pending_leave_info", {})
         leave_info["reason"] = text
