@@ -199,10 +199,10 @@ Thông tin thời gian làm việc:
 - Buổi chiều: 13:30 - 17:30
 - Không làm việc thứ 7 và chủ nhật
 
-Lưu ý quan trọng về xử lý ngày tháng:
+Lưu ý quan trọng về xử lý ngày tháng và giờ:
 - h: là giờ (ví dụ 12h trưa tức là 12:00)
 - LUÔN LUÔN sử "Ngày hiện tại là: {current_date.strftime('%m %d %Y %H:%M')}" làm mốc thời gian để suy luận các mốc thời gian tương đối như "hôm nay", "mai", "tuần sau", "thứ 2", v.v.
-- Định dạng ngày giờ trả về phải là: "MM DD YYYY HH:mm" (ví dụ: "05 27 2024 08:30")
+- Định dạng ngày giờ trả về phải là: "MM DD YYYY HH:mm" (ví dụ: "06 03 2025 08:30")
 
 Cách xử lý thời gian:
 1. Khi chỉ có ngày (ví dụ: "mai", "thứ 2"):
@@ -233,6 +233,17 @@ Nếu có ý định xuất file lương, trả về JSON dạng:
   "api_url": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip",
   "month": "<năm-tháng>"
 }}
+
+Lưu ý quan trọng về xử lý tháng xuất lương:
+1. Khi người dùng yêu cầu xuất lương tháng hiện tại:
+   - Nếu đang trong tháng hiện tại (ví dụ: ngày 15/3) → trả về tháng hiện tại (2024-03)
+   - Nếu đang trong tháng mới (ví dụ: ngày 1/4) → trả về tháng trước (2024-03)
+2. Khi người dùng chỉ định tháng cụ thể:
+   - Nếu chỉ có tháng (ví dụ: "tháng 3") → tự động thêm năm hiện tại (2024-03)
+   - Nếu có cả năm (ví dụ: "tháng 3/2024") → sử dụng đúng năm đó (2024-03)
+3. Khi người dùng dùng từ khóa "tháng này":
+   - Nếu đang trong tháng hiện tại → trả về tháng hiện tại
+   - Nếu đang trong tháng mới → trả về tháng trước
 
 Nếu có ý định xuất file point, trả về JSON dạng:
 {{
@@ -270,6 +281,24 @@ Người dùng: "nghỉ sáng mai vì bị cảm" →
     "to_date": "{next_day.strftime('%m %d %Y')} 12:00",
     "time_off": "4",
     "reason": "bị cảm"}}
+}}
+
+Người dùng: "xin nghỉ thứ 5 tuần này vì bận việc gia đình" (Giả sử Ngày hiện tại là Thứ 2 {current_date.strftime('%m %d %Y')}) →
+{{
+  "intent": "leave_request",
+  "api_url": "https://mbi.sapotacorp.vn/api/MissionAPI/SubmitReasonOffWork",
+  "leave_info": {{
+    "from_date": "{next_friday.strftime('%m %d %Y')} 08:30",
+    "to_date": "{next_friday.strftime('%m %d %Y')} 17:30",
+    "time_off": "8",
+    "reason": "bận việc gia đình"}}
+}}
+
+Người dùng: "xuất file lương tháng này" (Giả sử Ngày hiện tại là {current_date.strftime('%m %d %Y')}) →
+{{
+  "intent": "payslip_export",
+  "api_url": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip",
+  "month": "{current_date.strftime('%Y-%m')}"
 }}
 
 Người dùng: "xuất file lương tháng 3" →
