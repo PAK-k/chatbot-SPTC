@@ -200,9 +200,9 @@ Thông tin thời gian làm việc:
 - Không làm việc thứ 7 và chủ nhật
 
 Lưu ý quan trọng về xử lý ngày tháng và giờ:
-- h: là giờ (ví dụ 12h trưa tức là 12:00)
-- LUÔN LUÔN sử "Ngày hiện tại là: {current_date.strftime('%m %d %Y %H:%M')}" làm mốc thời gian để suy luận các mốc thời gian tương đối như "hôm nay", "mai", "tuần sau", "thứ 2", v.v.
-- Định dạng ngày giờ trả về phải là: "MM DD YYYY HH:mm" (ví dụ: "06 03 2025 08:30")
+- Ngày hiện tại là: {current_date.strftime('%m %d %Y %H:%M')}
+- Định dạng ngày giờ trả về phải là: "MM DD YYYY HH:mm" (ví dụ: "06 04 2025 08:30")
+- LUÔN LUÔN sử dụng ngày hiện tại làm mốc thời gian
 
 Cách xử lý thời gian:
 1. Khi chỉ có ngày (ví dụ: "mai", "thứ 2"):
@@ -214,6 +214,26 @@ Cách xử lý thời gian:
    - Nếu thời gian nằm trong buổi sáng (8:30-12:00) → tính là buổi sáng
    - Nếu thời gian nằm trong buổi chiều (13:30-17:30) → tính là buổi chiều
    - Nếu thời gian nằm ngoài giờ làm việc → báo lỗi và không trả về leave_info
+
+3. Xử lý các từ khóa thời gian:
+   - "mai" = ngày tiếp theo
+   - "hôm nay" = ngày hiện tại
+   - "thứ X" = ngày thứ X trong tuần hiện tại (nếu đã qua thì tính tuần sau)
+   - "tuần này" = tuần hiện tại
+   - "tuần sau" = tuần tiếp theo
+   - "tháng này" = tháng hiện tại
+   - "tháng sau" = tháng tiếp theo
+
+4. Xử lý giờ:
+   - "sáng" = 8:30-12:00
+   - "chiều" = 13:30-17:30
+   - "cả ngày" = 8:30-17:30
+   - Giờ cụ thể (ví dụ: "9h", "9:00") → giữ nguyên giờ đó
+
+5. Xử lý nhiều ngày liên tiếp:
+   - Khi có nhiều ngày (ví dụ: "thứ 2, 3") → tính từ ngày đầu đến ngày cuối
+   - Khi có dấu phẩy hoặc "và" giữa các ngày → tính là nhiều ngày liên tiếp
+   - Khi có từ "đến" hoặc "tới" → tính từ ngày đầu đến ngày cuối
 
 Nếu có ý định nghỉ phép và xác định được thời gian, trả về JSON dạng:
 {{
@@ -265,7 +285,7 @@ Danh sách intent được hỗ trợ:
 - "point_export": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelReportUser"
 
 Phân tích các từ khóa:
-- Đăng ký nghỉ, xin nghỉ, tạo đơn nghỉ → leave_request
+- Đăng ký nghỉ, xin nghỉ, tạo đơn nghỉ, Làm remote, làm việc từ xa, work from home → leave_request
 - Xem lịch sử nghỉ, đơn đã gửi → leave_history
 - Xuất file lương, tải file lương → payslip_export
 - Xuất file point, tải báo cáo user, xuất báo cáo user → point_export
@@ -292,6 +312,17 @@ Người dùng: "xin nghỉ thứ 5 tuần này vì bận việc gia đình" (Gi
     "to_date": "{next_friday.strftime('%m %d %Y')} 17:30",
     "time_off": "8",
     "reason": "bận việc gia đình"}}
+}}
+
+Người dùng: "thứ 2, 3 tuần sau tôi làm remote" →
+{{
+  "intent": "leave_request",
+  "api_url": "https://mbi.sapotacorp.vn/api/MissionAPI/SubmitReasonOffWork",
+  "leave_info": {{
+    "from_date": "{next_monday.strftime('%m %d %Y')} 08:30",
+    "to_date": "{(next_monday + timedelta(days=1)).strftime('%m %d %Y')} 17:30",
+    "time_off": "16",
+    "reason": "làm remote"}}
 }}
 
 Người dùng: "xuất file lương tháng này" (Giả sử Ngày hiện tại là {current_date.strftime('%m %d %Y')}) →
