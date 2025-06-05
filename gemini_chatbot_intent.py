@@ -285,14 +285,14 @@ Danh sách intent được hỗ trợ:
 - "point_export": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelReportUser"
 
 Phân tích các từ khóa:
-- Đăng ký nghỉ, xin nghỉ, tạo đơn nghỉ, Làm remote, làm việc từ xa, work from home → leave_request
+- Đăng ký nghỉ, xin nghỉ, tạo đơn nghỉ, off → leave_request
 - Xem lịch sử nghỉ, đơn đã gửi → leave_history
 - Xuất file lương, tải file lương → payslip_export
 - Xuất file point, tải báo cáo user, xuất báo cáo user → point_export
 
 Ví dụ về phân tích và trả về JSON (Sử dụng Ngày hiện tại: {current_date.strftime('%m %d %Y')}):
 
-Người dùng: "nghỉ sáng mai vì bị cảm" →
+Người dùng: "nghỉ sáng mai vì làm remote" →
 {{
   "intent": "leave_request",
   "api_url": "https://mbi.sapotacorp.vn/api/MissionAPI/SubmitReasonOffWork",
@@ -300,7 +300,7 @@ Người dùng: "nghỉ sáng mai vì bị cảm" →
     "from_date": "{next_day.strftime('%m %d %Y')} 08:30",
     "to_date": "{next_day.strftime('%m %d %Y')} 12:00",
     "time_off": "4",
-    "reason": "bị cảm"}}
+    "reason": "làm remote"}}
 }}
 
 Người dùng: "xin nghỉ thứ 5 tuần này vì bận việc gia đình" (Giả sử Ngày hiện tại là Thứ 2 {current_date.strftime('%m %d %Y')}) →
