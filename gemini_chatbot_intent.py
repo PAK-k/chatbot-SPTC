@@ -201,13 +201,10 @@ def read_excel_tasks(file_path):
     Đọc danh sách task từ file Excel
     """
     try:
-        # Đọc file Excel để tìm dòng tiêu đề
         print("Bắt đầu đọc file Excel...")
         
-        # Đọc 20 dòng đầu tiên để tìm dòng tiêu đề
         df_header = pd.read_excel(file_path, nrows=20)
         
-        # Tìm dòng tiêu đề
         header_row = find_header_row(file_path, ['MÃ DỰ ÁN', 'MÃ DEV'])
         if not header_row:
             return {
@@ -217,16 +214,12 @@ def read_excel_tasks(file_path):
             
         print(f"Đã tìm thấy dòng tiêu đề ở dòng số {header_row + 1} (index: {header_row})")
         
-        # Đọc lại file với dòng tiêu đề đã tìm được
         df_header = pd.read_excel(file_path, header=header_row)
         
-        # In ra các cột đọc được để debug
         print("Các cột đọc được từ file Excel (gốc -> chuẩn hóa):", {col: col.upper() for col in df_header.columns})
         
-        # Chuẩn hóa tên cột
         original_columns = {col: col.upper() for col in df_header.columns}
         
-        # Ánh xạ tên cột chuẩn hóa với tên tiếng Anh và chỉ mục
         standardized_mapping_and_index = {
             'MÃ DỰ ÁN': {'english_name': 'project_id', 'index': None},
             'MÃ DEV': {'english_name': 'dev_id', 'index': None}
@@ -236,7 +229,6 @@ def read_excel_tasks(file_path):
         found_column_indices = {}
         missing_required_original_columns = []
         
-        # Tìm từng cột cần thiết
         for standard_col in ['MÃ DỰ ÁN', 'MÃ DEV']:
             for original_col_name, standardized_name in original_columns.items():
                 if standardized_name == standard_col:
@@ -256,14 +248,12 @@ def read_excel_tasks(file_path):
             
         print(f"Đã tìm thấy chỉ mục các cột cần thiết: {found_column_indices}")
         
-        # Đọc dữ liệu chính từ file, bỏ qua 6 hàng đầu (trước dữ liệu) và chỉ đọc các cột cần thiết bằng chỉ mục
         print("Bỏ qua 6 hàng đầu tiên (skiprows=6) và đọc dữ liệu từ các chỉ mục cột đã xác định.")
         
         cols_by_index = sorted(found_column_indices.values())
         print(f"Chỉ mục cột sẽ sử dụng để đọc dữ liệu: {cols_by_index}")
         
         if file_path.lower().endswith('.xlsx'):
-            # Khi dùng skiprows và usecols bằng index, pandas đọc data từ hàng skiprows + 1
             df = pd.read_excel(file_path, engine='openpyxl', skiprows=6, usecols=cols_by_index, header=None, dtype={0: str, 1: str})
         else:
             df = pd.read_excel(file_path, engine='xlrd', skiprows=6, usecols=cols_by_index, header=None, dtype={0: str, 1: str})
@@ -271,16 +261,12 @@ def read_excel_tasks(file_path):
         print("Raw DataFrame after skiprows and usecols:")
         print(df)
         
-        # Đổi tên cột để dễ xử lý
         df.columns = ['project_id', 'dev_id']
         
-        # Lọc bỏ các dòng có giá trị NaN
         df = df.dropna()
         
-        # Thêm số thứ tự cho mỗi task
         df['index'] = range(1, len(df) + 1)
         
-        # Chuyển đổi dữ liệu thành list các dict
         tasks = df.to_dict('records')
         
         print("DataFrame sau khi đọc dữ liệu, lọc theo chỉ mục và đổi tên cột:")

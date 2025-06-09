@@ -21,10 +21,8 @@ def download_slack_file(file_id, file_path):
     try:
         print(f"Bắt đầu tải file với ID: {file_id}")
         
-        # Sử dụng Slack Web API để lấy thông tin file
         client = WebClient(token=os.environ.get('SLACK_BOT_TOKEN'))
         
-        # Lấy thông tin file
         try:
             response = client.files_info(file=file_id)
             if not response["ok"]:
@@ -38,13 +36,11 @@ def download_slack_file(file_id, file_path):
             file_info = response["file"]
             print(f"File info: {file_info}")
             
-            # Lấy URL tải file
             file_url = file_info.get("url_private")
             if not file_url:
                 print("Không tìm thấy URL tải file")
                 return False
                 
-            # Tải file từ URL với token bot
             headers = {
                 "Authorization": f"Bearer {os.environ.get('SLACK_BOT_TOKEN')}"
             }
@@ -54,7 +50,6 @@ def download_slack_file(file_id, file_path):
                 print(f"Lỗi khi tải file: {response.status_code} - {response.text}")
                 return False
                 
-            # Ghi file
             with open(file_path, 'wb') as f:
                 f.write(response.content)
                 
@@ -64,7 +59,6 @@ def download_slack_file(file_id, file_path):
             print(f"Lỗi khi tải file content: {str(e)}")
             return False
         
-        # Kiểm tra file sau khi tải
         if not os.path.exists(file_path):
             print("File không tồn tại sau khi tải")
             return False
@@ -76,11 +70,9 @@ def download_slack_file(file_id, file_path):
             print("File trống sau khi tải")
             return False
             
-        # Kiểm tra xem file có phải là file Excel hợp lệ không
         try:
             import zipfile
             with zipfile.ZipFile(file_path) as z:
-                # Nếu mở được file zip, đây là file Excel hợp lệ
                 return True
         except zipfile.BadZipFile:
             print("File không phải là file Excel hợp lệ")
@@ -92,7 +84,6 @@ def download_slack_file(file_id, file_path):
 
 def process_message(text, user_id):
     """Xử lý tin nhắn và trả về phản hồi phù hợp"""
-    # Kiểm tra các trạng thái chờ thông tin
     if user_sessions.get(user_id, {}).get("waiting_for_leave_details"):
         user_sessions[user_id].pop("waiting_for_leave_details")
         intent_result = detect_api_intent(text)
@@ -170,25 +161,21 @@ def process_message(text, user_id):
     if user_sessions.get(user_id, {}).get("waiting_for_excel_file"):
         user_sessions[user_id].pop("waiting_for_excel_file")
         
-        # Kiểm tra xem có file được đính kèm không
         if not text:
             return "❌ Vui lòng đính kèm file Excel"
         
         print(f"Bắt đầu xử lý file Excel với ID: {text}")
         
-        # Tạo file tạm để lưu file Excel
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_file:
             temp_path = temp_file.name
         
         print(f"Tạo file tạm tại: {temp_path}")
         
-        # Tải file từ Slack
         if not download_slack_file(text, temp_path):
             return "❌ Không thể tải file Excel từ Slack. Bot cần quyền files:read để tải file. Vui lòng liên hệ admin để cấp quyền."
         
         print(f"File đã được tải về thành công: {temp_path}")
         
-        # Kiểm tra file có tồn tại và có kích thước > 0
         if not os.path.exists(temp_path):
             return "❌ File Excel không tồn tại sau khi tải. Vui lòng thử lại."
             
@@ -200,11 +187,9 @@ def process_message(text, user_id):
         
         try:
             print("Bắt đầu đọc file Excel...")
-            # Đọc và xử lý file Excel
             result = read_excel_tasks(temp_path)
             print(f"Kết quả đọc file: {result}")
             
-            # Xóa file tạm
             try:
                 os.remove(temp_path)
                 print(f"Đã xóa file tạm: {temp_path}")
@@ -214,7 +199,6 @@ def process_message(text, user_id):
             if not result.get("success"):
                 return f"❌ {result.get('message')}"
             
-            # Tạo các task từ dữ liệu Excel
             tasks = result.get("tasks", [])
             success_count = 0
             error_count = 0
@@ -231,7 +215,6 @@ def process_message(text, user_id):
                     error_count += 1
                     error_messages.append(f"Task '{task.get('task_name')}': {task_result.get('message')}")
             
-            # Trả về kết quả
             response = f"✅ Đã tạo thành công {success_count} task"
             if error_count > 0:
                 response += f"\n❌ Không thể tạo {error_count} task:\n" + "\n".join(error_messages)
@@ -239,7 +222,6 @@ def process_message(text, user_id):
             
         except Exception as e:
             print(f"Lỗi khi xử lý file Excel: {str(e)}")
-            # Xóa file tạm nếu có lỗi
             try:
                 os.remove(temp_path)
                 print(f"Đã xóa file tạm sau lỗi: {temp_path}")
@@ -247,13 +229,11 @@ def process_message(text, user_id):
                 print(f"Lỗi khi xóa file tạm sau lỗi: {str(del_error)}")
             return f"❌ Lỗi khi xử lý file Excel: {str(e)}"
 
-    # Phân tích intent từ tin nhắn
     try:
         intent_result = detect_api_intent(text)
         parsed = json.loads(intent_result)
         
         if parsed is None or parsed.get("intent") == "none":
-            # Nếu không nhận ra ý định, trả lời linh hoạt ngay lập tức
             return chat_response(text)
              
         if parsed.get("intent") == "create_tasks_from_excel":
@@ -343,15 +323,12 @@ def process_message(text, user_id):
             return api_result
             
     except json.JSONDecodeError:
-        # Nếu có lỗi phân tích JSON, trả lời linh hoạt ngay lập tức
         return chat_response("Không hiểu rõ phản hồi từ AI.")
     except Exception as e:
-        # Nếu có lỗi khác, trả lời linh hoạt ngay lập tức
         return chat_response(f"Đã xảy ra lỗi không xác định: {str(e)}")
 
 def create_task(project_id, dev_id):
     try:
-        # Convert to integer directly without float conversion
         project_id = int(str(project_id).strip())
         dev_id = int(str(dev_id).strip())
         
@@ -365,7 +342,6 @@ def create_task(project_id, dev_id):
             "Content-Type": "application/json"
         }
         
-        # Send as query parameters
         params = {
             "projectID": project_id,
             "iddev": dev_id
@@ -395,7 +371,6 @@ def create_task(project_id, dev_id):
 
 def create_tasks_from_excel(file_path):
     try:
-        # Read tasks from Excel file
         result = read_excel_tasks(file_path)
         if not result["success"]:
             return result
@@ -404,12 +379,10 @@ def create_tasks_from_excel(file_path):
         if not tasks:
             return {"success": False, "message": "Không tìm thấy task nào trong file Excel"}
             
-        # Create tasks
         success_count = 0
         error_messages = []
         
         for task in tasks:
-            # Skip empty values
             if not task["project_id"] or not task["dev_id"]:
                 error_messages.append(f"Task {task['index']}: Bỏ qua do thiếu thông tin project_id hoặc dev_id")
                 continue
@@ -420,7 +393,6 @@ def create_tasks_from_excel(file_path):
             else:
                 error_messages.append(f"Task {task['index']}: {result['message']}")
                 
-        # Construct result message
         if success_count > 0:
             message = f"✅ Đã tạo thành công {success_count} task"
             if error_messages:
@@ -444,13 +416,11 @@ def handle_message_events(body, say):
     
     print(f"Nhận tin nhắn từ user {user_id}: {text}")
     
-    # Kiểm tra xem có file được đính kèm không
     if "files" in body["event"]:
         print(f"Phát hiện file đính kèm: {body['event']['files']}")
         for file in body["event"]["files"]:
             if file.get("filetype") in ["xlsx", "xls"]:
                 print(f"Tìm thấy file Excel: {file}")
-                # Lưu file ID để sử dụng cho việc tải file
                 text = file.get("id", "")
                 print(f"File ID: {text}")
     
