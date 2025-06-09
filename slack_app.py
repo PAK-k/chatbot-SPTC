@@ -1,11 +1,14 @@
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from flask import Flask
-from gemini_chatbot_intent import detect_api_intent, chat_response, call_real_api, export_payslip
-from app import submit_leave_request, export_point_report
+from gemini_chatbot_intent import detect_api_intent, chat_response, call_real_api, export_payslip, read_excel_tasks
+from app import submit_leave_request, export_point_report, create_task
 import json
 import os
 from dotenv import load_dotenv
+import requests
+import tempfile
+from slack_sdk import WebClient
 
 load_dotenv()
 
@@ -13,8 +16,83 @@ slack_app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
 
 user_sessions = {}
 
+def download_slack_file(file_id, file_path):
+    """Tải file từ Slack về máy local"""
+    try:
+        print(f"Bắt đầu tải file với ID: {file_id}")
+        
+        # Sử dụng Slack Web API để lấy thông tin file
+        client = WebClient(token=os.environ.get('SLACK_BOT_TOKEN'))
+        
+        # Lấy thông tin file
+        try:
+            response = client.files_info(file=file_id)
+            if not response["ok"]:
+                error = response.get('error')
+                if error == 'missing_scope':
+                    print("Bot thiếu quyền files:read. Vui lòng thêm quyền này vào bot và cài đặt lại app.")
+                    return False
+                print(f"Lỗi khi lấy thông tin file: {error}")
+                return False
+                
+            file_info = response["file"]
+            print(f"File info: {file_info}")
+            
+            # Lấy URL tải file
+            file_url = file_info.get("url_private")
+            if not file_url:
+                print("Không tìm thấy URL tải file")
+                return False
+                
+            # Tải file từ URL với token bot
+            headers = {
+                "Authorization": f"Bearer {os.environ.get('SLACK_BOT_TOKEN')}"
+            }
+            response = requests.get(file_url, headers=headers)
+            
+            if response.status_code != 200:
+                print(f"Lỗi khi tải file: {response.status_code} - {response.text}")
+                return False
+                
+            # Ghi file
+            with open(file_path, 'wb') as f:
+                f.write(response.content)
+                
+            print(f"Đã ghi file thành công vào: {file_path}")
+            
+        except Exception as e:
+            print(f"Lỗi khi tải file content: {str(e)}")
+            return False
+        
+        # Kiểm tra file sau khi tải
+        if not os.path.exists(file_path):
+            print("File không tồn tại sau khi tải")
+            return False
+            
+        file_size = os.path.getsize(file_path)
+        print(f"File size sau khi tải: {file_size} bytes")
+        
+        if file_size == 0:
+            print("File trống sau khi tải")
+            return False
+            
+        # Kiểm tra xem file có phải là file Excel hợp lệ không
+        try:
+            import zipfile
+            with zipfile.ZipFile(file_path) as z:
+                # Nếu mở được file zip, đây là file Excel hợp lệ
+                return True
+        except zipfile.BadZipFile:
+            print("File không phải là file Excel hợp lệ")
+            return False
+            
+    except Exception as e:
+        print(f"Lỗi khi tải file từ Slack: {str(e)}")
+        return False
+
 def process_message(text, user_id):
     """Xử lý tin nhắn và trả về phản hồi phù hợp"""
+    # Kiểm tra các trạng thái chờ thông tin
     if user_sessions.get(user_id, {}).get("waiting_for_leave_details"):
         user_sessions[user_id].pop("waiting_for_leave_details")
         intent_result = detect_api_intent(text)
@@ -64,17 +142,153 @@ def process_message(text, user_id):
         else:
             return f"❌ {result.get('message')}"
 
-    intent_result = detect_api_intent(text)
+    if user_sessions.get(user_id, {}).get("waiting_for_task_project"):
+        user_sessions[user_id].pop("waiting_for_task_project")
+        task_info = user_sessions[user_id].get("pending_task_info", {})
+        task_info["project_id"] = text
+        user_sessions[user_id]["pending_task_info"] = task_info
+        user_sessions[user_id]["waiting_for_task_dev"] = True
+        return "📝 Vui lòng nhập ID của developer:"
+
+    if user_sessions.get(user_id, {}).get("waiting_for_task_dev"):
+        user_sessions[user_id].pop("waiting_for_task_dev")
+        task_info = user_sessions[user_id].get("pending_task_info", {})
+        task_info["dev_id"] = text
+        user_sessions[user_id]["pending_task_info"] = task_info
+        
+        result = create_task(
+            project_id=task_info.get("project_id"),
+            dev_id=task_info.get("dev_id")
+        )
+        user_sessions[user_id].pop("pending_task_info")
+        
+        if result.get("success"):
+            return "✅ Đã tạo task thành công!"
+        else:
+            return f"❌ {result.get('message')}"
+
+    if user_sessions.get(user_id, {}).get("waiting_for_excel_file"):
+        user_sessions[user_id].pop("waiting_for_excel_file")
+        
+        # Kiểm tra xem có file được đính kèm không
+        if not text:
+            return "❌ Vui lòng đính kèm file Excel"
+        
+        print(f"Bắt đầu xử lý file Excel với ID: {text}")
+        
+        # Tạo file tạm để lưu file Excel
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_file:
+            temp_path = temp_file.name
+        
+        print(f"Tạo file tạm tại: {temp_path}")
+        
+        # Tải file từ Slack
+        if not download_slack_file(text, temp_path):
+            return "❌ Không thể tải file Excel từ Slack. Bot cần quyền files:read để tải file. Vui lòng liên hệ admin để cấp quyền."
+        
+        print(f"File đã được tải về thành công: {temp_path}")
+        
+        # Kiểm tra file có tồn tại và có kích thước > 0
+        if not os.path.exists(temp_path):
+            return "❌ File Excel không tồn tại sau khi tải. Vui lòng thử lại."
+            
+        file_size = os.path.getsize(temp_path)
+        print(f"Kích thước file: {file_size} bytes")
+        
+        if file_size == 0:
+            return "❌ File Excel trống. Vui lòng thử lại."
+        
+        try:
+            print("Bắt đầu đọc file Excel...")
+            # Đọc và xử lý file Excel
+            result = read_excel_tasks(temp_path)
+            print(f"Kết quả đọc file: {result}")
+            
+            # Xóa file tạm
+            try:
+                os.remove(temp_path)
+                print(f"Đã xóa file tạm: {temp_path}")
+            except Exception as e:
+                print(f"Lỗi khi xóa file tạm: {str(e)}")
+            
+            if not result.get("success"):
+                return f"❌ {result.get('message')}"
+            
+            # Tạo các task từ dữ liệu Excel
+            tasks = result.get("tasks", [])
+            success_count = 0
+            error_count = 0
+            error_messages = []
+            
+            for task in tasks:
+                task_result = create_task(
+                    project_id=task.get("project_id"),
+                    dev_id=task.get("dev_id")
+                )
+                if task_result.get("success"):
+                    success_count += 1
+                else:
+                    error_count += 1
+                    error_messages.append(f"Task '{task.get('task_name')}': {task_result.get('message')}")
+            
+            # Trả về kết quả
+            response = f"✅ Đã tạo thành công {success_count} task"
+            if error_count > 0:
+                response += f"\n❌ Không thể tạo {error_count} task:\n" + "\n".join(error_messages)
+            return response
+            
+        except Exception as e:
+            print(f"Lỗi khi xử lý file Excel: {str(e)}")
+            # Xóa file tạm nếu có lỗi
+            try:
+                os.remove(temp_path)
+                print(f"Đã xóa file tạm sau lỗi: {temp_path}")
+            except Exception as del_error:
+                print(f"Lỗi khi xóa file tạm sau lỗi: {str(del_error)}")
+            return f"❌ Lỗi khi xử lý file Excel: {str(e)}"
+
+    # Phân tích intent từ tin nhắn
     try:
+        intent_result = detect_api_intent(text)
         parsed = json.loads(intent_result)
         
-        if parsed is None:
-            return chat_response("Không hiểu rõ yêu cầu của bạn.")
-             
-        if parsed.get("intent") == "none":
+        if parsed is None or parsed.get("intent") == "none":
+            # Nếu không nhận ra ý định, trả lời linh hoạt ngay lập tức
             return chat_response(text)
+             
+        if parsed.get("intent") == "create_tasks_from_excel":
+            user_sessions[user_id] = user_sessions.get(user_id, {})
+            user_sessions[user_id]["waiting_for_excel_file"] = True
+            return "📝 Vui lòng đính kèm file Excel chứa danh sách task cần tạo."
             
-        if parsed.get("intent") == "leave_request":
+        elif parsed.get("intent") == "create_task":
+            task_info = parsed.get("task_info", {})
+            if not task_info or task_info is None:
+                return "❌ Không xác định được thông tin task"
+            
+            if not task_info.get("project_id"):
+                user_sessions[user_id] = user_sessions.get(user_id, {})
+                user_sessions[user_id]["waiting_for_task_project"] = True
+                user_sessions[user_id]["pending_task_info"] = task_info
+                return "📝 Vui lòng nhập ID của dự án:"
+            
+            if not task_info.get("dev_id"):
+                user_sessions[user_id] = user_sessions.get(user_id, {})
+                user_sessions[user_id]["waiting_for_task_dev"] = True
+                user_sessions[user_id]["pending_task_info"] = task_info
+                return "📝 Vui lòng nhập ID của developer:"
+            
+            result = create_task(
+                project_id=task_info.get("project_id"),
+                dev_id=task_info.get("dev_id")
+            )
+            
+            if result.get("success"):
+                return "✅ Đã tạo task thành công!"
+            else:
+                return f"❌ {result.get('message')}"
+            
+        elif parsed.get("intent") == "leave_request":
             leave_info = parsed.get("leave_info", {})
             if not leave_info or leave_info is None:
                 user_sessions[user_id] = user_sessions.get(user_id, {})
@@ -129,9 +343,95 @@ def process_message(text, user_id):
             return api_result
             
     except json.JSONDecodeError:
+        # Nếu có lỗi phân tích JSON, trả lời linh hoạt ngay lập tức
         return chat_response("Không hiểu rõ phản hồi từ AI.")
     except Exception as e:
-        return f"❌ Đã xảy ra lỗi không xác định: {str(e)}"
+        # Nếu có lỗi khác, trả lời linh hoạt ngay lập tức
+        return chat_response(f"Đã xảy ra lỗi không xác định: {str(e)}")
+
+def create_task(project_id, dev_id):
+    try:
+        # Convert to integer directly without float conversion
+        project_id = int(str(project_id).strip())
+        dev_id = int(str(dev_id).strip())
+        
+        url = "https://mbi.sapotacorp.vn/api/TaskAPI/CreateTask"
+        headers = {
+            "accept": "application/json, text/plain, */*",
+            "authorization": "michael##Hamia*10124##4",
+            "cache-control": "no-cache",
+            "pragma": "no-cache",
+            "referer": "https://mbi.sapotacorp.vn/Task/CreateTask",
+            "Content-Type": "application/json"
+        }
+        
+        # Send as query parameters
+        params = {
+            "projectID": project_id,
+            "iddev": dev_id
+        }
+        
+        response = requests.get(url, params=params, headers=headers)
+        print(f"API response: {response.status_code} {response.text}")
+        
+        if response.status_code == 200:
+            return {"success": True, "message": "Tạo task thành công"}
+        else:
+            error_message = "Lỗi không xác định"
+            try:
+                error_data = response.json()
+                if "Message" in error_data:
+                    error_message = error_data["Message"]
+                elif "message" in error_data:
+                    error_message = error_data["message"]
+            except:
+                pass
+            return {"success": False, "message": f"Lỗi khi tạo task: {error_message}"}
+            
+    except ValueError as e:
+        return {"success": False, "message": f"Giá trị không hợp lệ: {str(e)}"}
+    except Exception as e:
+        return {"success": False, "message": f"Lỗi khi tạo task: {str(e)}"}
+
+def create_tasks_from_excel(file_path):
+    try:
+        # Read tasks from Excel file
+        result = read_excel_tasks(file_path)
+        if not result["success"]:
+            return result
+            
+        tasks = result["tasks"]
+        if not tasks:
+            return {"success": False, "message": "Không tìm thấy task nào trong file Excel"}
+            
+        # Create tasks
+        success_count = 0
+        error_messages = []
+        
+        for task in tasks:
+            # Skip empty values
+            if not task["project_id"] or not task["dev_id"]:
+                error_messages.append(f"Task {task['index']}: Bỏ qua do thiếu thông tin project_id hoặc dev_id")
+                continue
+                
+            result = create_task(task["project_id"], task["dev_id"])
+            if result["success"]:
+                success_count += 1
+            else:
+                error_messages.append(f"Task {task['index']}: {result['message']}")
+                
+        # Construct result message
+        if success_count > 0:
+            message = f"✅ Đã tạo thành công {success_count} task"
+            if error_messages:
+                message += f"\n❌ {len(error_messages)} task thất bại:\n" + "\n".join(error_messages)
+        else:
+            message = "❌ Không thể tạo task nào:\n" + "\n".join(error_messages)
+            
+        return {"success": success_count > 0, "message": message}
+        
+    except Exception as e:
+        return {"success": False, "message": f"Lỗi khi xử lý file Excel: {str(e)}"}
 
 @slack_app.event("message")
 def handle_message_events(body, say):
@@ -141,6 +441,18 @@ def handle_message_events(body, say):
         
     text = body["event"]["text"]
     user_id = body["event"]["user"]
+    
+    print(f"Nhận tin nhắn từ user {user_id}: {text}")
+    
+    # Kiểm tra xem có file được đính kèm không
+    if "files" in body["event"]:
+        print(f"Phát hiện file đính kèm: {body['event']['files']}")
+        for file in body["event"]["files"]:
+            if file.get("filetype") in ["xlsx", "xls"]:
+                print(f"Tìm thấy file Excel: {file}")
+                # Lưu file ID để sử dụng cho việc tải file
+                text = file.get("id", "")
+                print(f"File ID: {text}")
     
     response = process_message(text, user_id)
     say(text=response)

@@ -2,6 +2,9 @@ import google.generativeai as genai
 import json
 import requests
 from datetime import datetime, timedelta
+import pandas as pd
+import os
+import pandas as pd
 
 genai.configure(api_key="AIzaSyB8d5o2veAopoa5FlcVxKqm3z8LNkP19Zk")
 model = genai.GenerativeModel('models/gemini-2.0-flash')
@@ -177,6 +180,124 @@ def calculate_leave_hours(from_date, to_date):
         print(f"Error calculating leave hours: {str(e)}")
         return 0
 
+def find_header_row(file_path, required_columns, max_rows_to_check=20):
+    """
+    Tìm dòng header (index bắt đầu từ 0) chứa đầy đủ các cột bắt buộc
+    """
+    engine = 'openpyxl' if file_path.lower().endswith('.xlsx') else 'xlrd'
+    try:
+        preview_df = pd.read_excel(file_path, engine=engine, header=None, nrows=max_rows_to_check)
+    except Exception as e:
+        raise ValueError(f"Không thể đọc file Excel để dò dòng tiêu đề: {e}")
+    
+    for i in range(len(preview_df)):
+        row_values = preview_df.iloc[i].astype(str).str.strip().str.upper().tolist()
+        if all(any(req_col in val for val in row_values) for req_col in required_columns):
+            return i
+    return None
+
+def read_excel_tasks(file_path):
+    """
+    Đọc danh sách task từ file Excel
+    """
+    try:
+        # Đọc file Excel để tìm dòng tiêu đề
+        print("Bắt đầu đọc file Excel...")
+        
+        # Đọc 20 dòng đầu tiên để tìm dòng tiêu đề
+        df_header = pd.read_excel(file_path, nrows=20)
+        
+        # Tìm dòng tiêu đề
+        header_row = find_header_row(file_path, ['MÃ DỰ ÁN', 'MÃ DEV'])
+        if not header_row:
+            return {
+                "success": False,
+                "message": "Không tìm thấy dòng tiêu đề trong file Excel"
+            }
+            
+        print(f"Đã tìm thấy dòng tiêu đề ở dòng số {header_row + 1} (index: {header_row})")
+        
+        # Đọc lại file với dòng tiêu đề đã tìm được
+        df_header = pd.read_excel(file_path, header=header_row)
+        
+        # In ra các cột đọc được để debug
+        print("Các cột đọc được từ file Excel (gốc -> chuẩn hóa):", {col: col.upper() for col in df_header.columns})
+        
+        # Chuẩn hóa tên cột
+        original_columns = {col: col.upper() for col in df_header.columns}
+        
+        # Ánh xạ tên cột chuẩn hóa với tên tiếng Anh và chỉ mục
+        standardized_mapping_and_index = {
+            'MÃ DỰ ÁN': {'english_name': 'project_id', 'index': None},
+            'MÃ DEV': {'english_name': 'dev_id', 'index': None}
+        }
+        
+        found_columns = {}
+        found_column_indices = {}
+        missing_required_original_columns = []
+        
+        # Tìm từng cột cần thiết
+        for standard_col in ['MÃ DỰ ÁN', 'MÃ DEV']:
+            for original_col_name, standardized_name in original_columns.items():
+                if standardized_name == standard_col:
+                    found_columns[standardized_mapping_and_index[standard_col]['english_name']] = original_col_name
+                    col_index = df_header.columns.get_loc(original_col_name)
+                    found_column_indices[standardized_mapping_and_index[standard_col]['english_name']] = col_index
+                    standardized_mapping_and_index[standard_col]['index'] = col_index
+                    break
+            else:
+                missing_required_original_columns.append(standard_col)
+                
+        if missing_required_original_columns:
+            return {
+                "success": False,
+                "message": f"File Excel thiếu các cột bắt buộc: {', '.join(missing_required_original_columns)}"
+            }
+            
+        print(f"Đã tìm thấy chỉ mục các cột cần thiết: {found_column_indices}")
+        
+        # Đọc dữ liệu chính từ file, bỏ qua 6 hàng đầu (trước dữ liệu) và chỉ đọc các cột cần thiết bằng chỉ mục
+        print("Bỏ qua 6 hàng đầu tiên (skiprows=6) và đọc dữ liệu từ các chỉ mục cột đã xác định.")
+        
+        cols_by_index = sorted(found_column_indices.values())
+        print(f"Chỉ mục cột sẽ sử dụng để đọc dữ liệu: {cols_by_index}")
+        
+        if file_path.lower().endswith('.xlsx'):
+            # Khi dùng skiprows và usecols bằng index, pandas đọc data từ hàng skiprows + 1
+            df = pd.read_excel(file_path, engine='openpyxl', skiprows=6, usecols=cols_by_index, header=None, dtype={0: str, 1: str})
+        else:
+            df = pd.read_excel(file_path, engine='xlrd', skiprows=6, usecols=cols_by_index, header=None, dtype={0: str, 1: str})
+            
+        print("Raw DataFrame after skiprows and usecols:")
+        print(df)
+        
+        # Đổi tên cột để dễ xử lý
+        df.columns = ['project_id', 'dev_id']
+        
+        # Lọc bỏ các dòng có giá trị NaN
+        df = df.dropna()
+        
+        # Thêm số thứ tự cho mỗi task
+        df['index'] = range(1, len(df) + 1)
+        
+        # Chuyển đổi dữ liệu thành list các dict
+        tasks = df.to_dict('records')
+        
+        print("DataFrame sau khi đọc dữ liệu, lọc theo chỉ mục và đổi tên cột:")
+        print(df)
+        
+        return {
+            "success": True,
+            "tasks": tasks
+        }
+        
+    except Exception as e:
+        print(f"Lỗi khi đọc file Excel: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Lỗi khi đọc file Excel: {str(e)}"
+        }
+
 def detect_api_intent(user_input):
     current_date = datetime.now()
     next_day = current_date + timedelta(days=1)
@@ -283,12 +404,35 @@ Danh sách intent được hỗ trợ:
 - "leave_history": "https://mbi.sapotacorp.vn/User/NghiPhep/History"
 - "payslip_export": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelPayslip"
 - "point_export": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelReportUser"
+- "create_task": "https://mbi.sapotacorp.vn/api/TaskAPI/CreateTask"
+- "create_tasks_from_excel": "https://mbi.sapotacorp.vn/api/TaskAPI/CreateTask"
 
 Phân tích các từ khóa:
 - Đăng ký nghỉ, xin nghỉ, tạo đơn nghỉ, off → leave_request
 - Xem lịch sử nghỉ, đơn đã gửi → leave_history
 - Xuất file lương, tải file lương → payslip_export
 - Xuất file point, tải báo cáo user, xuất báo cáo user → point_export
+- Tạo task, thêm task, tạo công việc → create_task
+- Tạo task từ Excel, import task từ Excel, tạo nhiều task từ file → create_tasks_from_excel
+
+Nếu có ý định tạo task, trả về JSON dạng:
+{{
+  "intent": "create_task",
+  "api_url": "https://mbi.sapotacorp.vn/api/TaskAPI/CreateTask",
+  "task_info": {{
+    "project_id": "<id dự án>",
+    "dev_id": "<id developer>"
+  }}
+}}
+
+Nếu có ý định tạo task từ file Excel, trả về JSON dạng:
+{{
+  "intent": "create_tasks_from_excel",
+  "api_url": "https://mbi.sapotacorp.vn/api/TaskAPI/CreateTask",
+  "excel_info": {{
+    "file_path": "<đường dẫn file Excel>"
+  }}
+}}
 
 Ví dụ về phân tích và trả về JSON (Sử dụng Ngày hiện tại: {current_date.strftime('%m %d %Y')}):
 
@@ -343,6 +487,25 @@ Người dùng: "xuất file point" →
 {{
   "intent": "point_export",
   "api_url": "https://mbi.sapotacorp.vn/api/UserAPI/OutputExcelReportUser"
+}}
+
+Người dùng: "tạo task để làm remote" →
+{{
+  "intent": "create_task",
+  "api_url": "https://mbi.sapotacorp.vn/api/TaskAPI/CreateTask",
+  "task_info": {{
+    "project_id": "<id dự án>",
+    "dev_id": "<id developer>"
+  }}
+}}
+
+Người dùng: "tạo task từ Excel" →
+{{
+  "intent": "create_tasks_from_excel",
+  "api_url": "https://mbi.sapotacorp.vn/api/TaskAPI/CreateTask",
+  "excel_info": {{
+    "file_path": "<đường dẫn file Excel>"
+  }}
 }}
 
 Câu người dùng: "{user_input}"
