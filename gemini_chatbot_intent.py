@@ -2,9 +2,6 @@ import google.generativeai as genai
 import json
 import requests
 from datetime import datetime, timedelta
-import os
-import pandas as pd
-from openpyxl import load_workbook
 
 genai.configure(api_key="AIzaSyB8d5o2veAopoa5FlcVxKqm3z8LNkP19Zk")
 model = genai.GenerativeModel('models/gemini-2.0-flash')
@@ -94,18 +91,15 @@ def validate_leave_dates(from_date, to_date):
         end = datetime.strptime(to_date, "%m %d %Y %H:%M")
         current = datetime.now()
 
-        # Kiểm tra ngày nghỉ không được trong quá khứ
         if start < current:
             return False, "❌ Không thể đăng ký nghỉ trong quá khứ"
 
-        # Kiểm tra thời gian nghỉ không được quá 30 ngày
         if (end - start).days > 30:
             return False, "❌ Thời gian nghỉ không được vượt quá 30 ngày"
 
-        # Kiểm tra ngày nghỉ phải là ngày làm việc
         current_date = start
         while current_date.date() <= end.date():
-            if current_date.weekday() >= 5:  # Thứ 7 (5) và Chủ nhật (6)
+            if current_date.weekday() >= 5: 
                 return False, "❌ Không thể đăng ký nghỉ vào cuối tuần"
             current_date += timedelta(days=1)
 
@@ -134,7 +128,6 @@ def calculate_leave_hours(from_date, to_date):
                 morning_start, morning_end = working_hours["morning"]
                 afternoon_start, afternoon_end = working_hours["afternoon"]
 
-                # Xử lý buổi sáng
                 if current.date() == start.date():
                     morning_start = max(morning_start, start)
                 if current.date() == end.date():
@@ -144,7 +137,6 @@ def calculate_leave_hours(from_date, to_date):
                     morning_hours = (morning_end - morning_start).total_seconds() / 3600
                     total_hours += morning_hours
 
-                # Xử lý buổi chiều
                 if current.date() == start.date():
                     afternoon_start = max(afternoon_start, start)
                 if current.date() == end.date():
@@ -230,14 +222,6 @@ Cách xử lý thời gian:
    - Khi có từ "đến" hoặc "tới" → tính từ ngày đầu đến ngày cuối
    - Khi có từ "từ" → tính từ ngày đó đến ngày hiện tại
    - Khi có từ "trong" → tính trong khoảng thời gian đó
-
-6. Xử lý các trường hợp đặc biệt:
-   - "nghỉ ngay" = nghỉ ngay lập tức
-   - "nghỉ gấp" = nghỉ ngay lập tức
-   - "nghỉ khẩn cấp" = nghỉ ngay lập tức
-   - "nghỉ có kế hoạch" = nghỉ theo lịch đã định
-   - "nghỉ dài ngày" = nghỉ nhiều ngày liên tiếp
-   - "nghỉ ngắn ngày" = nghỉ 1-2 ngày
 
 Nếu có ý định nghỉ phép và xác định được thời gian, trả về JSON dạng:
 {{
@@ -364,7 +348,6 @@ Chỉ trả về JSON, không giải thích.
              from_date = leave_info.get("from_date")
              to_date = leave_info.get("to_date")
              if from_date and to_date:
-                # Kiểm tra tính hợp lệ của ngày nghỉ
                 is_valid, error_message = validate_leave_dates(from_date, to_date)
                 if not is_valid:
                     return json.dumps({ 
@@ -374,7 +357,6 @@ Chỉ trả về JSON, không giải thích.
                         "leave_info": None 
                     })
 
-                # Tính số giờ nghỉ
                 hours = calculate_leave_hours(from_date, to_date)
                 if hours == 0:
                     return json.dumps({ 

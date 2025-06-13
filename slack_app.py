@@ -1,14 +1,10 @@
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
-from flask import Flask
 from gemini_chatbot_intent import detect_api_intent, chat_response, call_real_api, export_payslip
 from app import submit_leave_request, export_point_report
 import json
 import os
 from dotenv import load_dotenv
-import requests
-import tempfile
-from slack_sdk import WebClient
 
 load_dotenv()
 
@@ -33,17 +29,6 @@ def process_message(text, user_id):
                     user_sessions[user_id]["pending_leave_info"] = leave_info
                     return "📝 Vẫn thiếu lý do nghỉ. Bạn vui lòng cho biết lý do?"
 
-                # Xử lý các trường hợp đặc biệt
-                leave_type = leave_info.get("type", "normal")
-                if leave_type == "urgent":
-                    # Thông báo đặc biệt cho nghỉ khẩn cấp
-                    response = "⚠️ Đang xử lý đơn nghỉ khẩn cấp...\n"
-                elif leave_type == "planned":
-                    # Thông báo cho nghỉ có kế hoạch
-                    response = "📅 Đang xử lý đơn nghỉ có kế hoạch...\n"
-                else:
-                    response = ""
-
                 result = submit_leave_request(
                     userid="1013",
                     username="michael",
@@ -53,9 +38,9 @@ def process_message(text, user_id):
                     reason=leave_info.get("reason")
                 )
                 if result.get("success"):
-                    return response + "✅ Đã gửi đơn nghỉ thành công!"
+                    return "✅ Đã gửi đơn nghỉ thành công!"
                 else:
-                    return response + f"❌ {result.get('message')}"
+                    return f"❌ {result.get('message')}"
             else:
                 return chat_response("Không hiểu rõ thông tin nghỉ phép bạn vừa cung cấp.")
         except json.JSONDecodeError:
@@ -64,15 +49,6 @@ def process_message(text, user_id):
     if user_sessions.get(user_id, {}).get("waiting_for_leave_reason"):
         leave_info = user_sessions[user_id].get("pending_leave_info", {})
         leave_info["reason"] = text
-        
-        # Xử lý các trường hợp đặc biệt
-        leave_type = leave_info.get("type", "normal")
-        if leave_type == "urgent":
-            response = "⚠️ Đang xử lý đơn nghỉ khẩn cấp...\n"
-        elif leave_type == "planned":
-            response = "📅 Đang xử lý đơn nghỉ có kế hoạch...\n"
-        else:
-            response = ""
         
         result = submit_leave_request(
             userid="1013",
@@ -86,9 +62,9 @@ def process_message(text, user_id):
         user_sessions[user_id].pop("pending_leave_info")
         
         if result.get("success"):
-            return response + "✅ Đã gửi đơn nghỉ thành công!"
+            return "✅ Đã gửi đơn nghỉ thành công!"
         else:
-            return response + f"❌ {result.get('message')}"
+            return f"❌ {result.get('message')}"
 
     try:
         intent_result = detect_api_intent(text)
@@ -114,15 +90,6 @@ def process_message(text, user_id):
                 user_sessions[user_id]["pending_leave_info"] = leave_info
                 return "📝 Bạn vui lòng cho biết lý do nghỉ?"
             
-            # Xử lý các trường hợp đặc biệt
-            leave_type = leave_info.get("type", "normal")
-            if leave_type == "urgent":
-                response = "⚠️ Đang xử lý đơn nghỉ khẩn cấp...\n"
-            elif leave_type == "planned":
-                response = "📅 Đang xử lý đơn nghỉ có kế hoạch...\n"
-            else:
-                response = ""
-            
             result = submit_leave_request(
                 userid="1013",
                 username="michael",
@@ -132,9 +99,9 @@ def process_message(text, user_id):
                 reason=leave_info.get("reason")
             )
             if result.get("success"):
-                return response + "✅ Đã gửi đơn nghỉ thành công!"
+                return "✅ Đã gửi đơn nghỉ thành công!"
             else:
-                return response + f"❌ {result.get('message')}"
+                return f"❌ {result.get('message')}"
             
         elif parsed.get("intent") == "payslip_export":
             month = parsed.get("month")
